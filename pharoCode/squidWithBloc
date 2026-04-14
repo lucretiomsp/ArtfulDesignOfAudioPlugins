@@ -1,0 +1,194 @@
+"=== Colours ==="
+  neonPink  := Color r: 1.0   g: 0.078 b: 0.576.                                                                                   
+  deepPink  := Color r: 0.73  g: 0.0   b: 0.39.                                                                                    
+  lightPink := Color r: 1.0   g: 0.608 b: 0.843.
+  tealGlow  := Color r: 0.22  g: 0.855 b: 0.765.                                                                                   
+  seaDeep   := Color r: 0.008 g: 0.02  b: 0.063.
+                                                                                                                                   
+  "=== Space (600×600) ==="
+  space := B5Space new.                                                                                                            
+  space root background: seaDeep.                                                                                                  
+  cx := 300. cy := 175.
+                                                                                                                                   
+  "=== Deep-sea depth bands ==="                                                                                                   
+  #(140 290 440) do: [ :yPos |                                                                                                     
+      space addChild: (B5Rect new                                                                                                  
+          mode: #corner;                                                                                                           
+          position: 0 @ yPos;
+          extent: 600 @ 5;                                                                                                         
+          background: (Color r: 0.02 g: 0.09 b: 0.25 alpha: 0.55);
+          yourself) ].                                                                                                             
+                  
+  "=== Static bioluminescent dots ==="                                                                                             
+  { 45@80. 120@310. 195@55. 265@420. 340@130. 410@480.
+    480@70. 530@250. 60@500. 350@380. 175@200. 450@160 } do: [ :pt |                                                               
+      space addChild: (B5Circle new                                                                                                
+          diameter: 3;                                                                                                             
+          background: tealGlow;                                                                                                    
+          position: pt) ].
+
+  "=== Tentacle polygon elements — added before body so they appear behind it ==="                                                 
+  numLegs := 6.
+  tentacleElements := Array new: numLegs.                                                                                          
+  1 to: numLegs do: [ :leg |
+      | el |                                                                                                                       
+      el := BlElement new
+          extent: 600 @ 600;                                                                                                       
+          geometry: (BlPolygonGeometry vertices: { 0@0. 0@1. 1@0 });
+          background: (leg even ifTrue: [ deepPink ] ifFalse: [ neonPink ]);                                                       
+          border: (BlBorder paint: lightPink width: 1);                                                                            
+          yourself.                                                                                                                
+      space addChild: el.                                                                                                          
+      tentacleElements at: leg put: el ].                                                                                          
+                                                                                                                                   
+  "=== updateTentacle: recompute the cubic-bezier polygon for one leg.                                                             
+       The polygon traces left+right edges of a tapered tube (15 steps),                                                           
+       using local coords == world coords (same 600@600 extent trick as B5Triangle). ==="                                          
+  updateTentacle := [ :leg :tipPt |                                                                                                
+      | legFrac startX startY lean cp1X cp1Y cp2X cp2Y                                                                             
+        startW endW n leftPts rightPts col |                                                                                       
+      legFrac := (leg - 1) asFloat / (numLegs - 1).                                                                                
+      startX  := cx + ((legFrac - 0.5) * 95).                                                                                      
+      startY  := cy + 79.                                                                                                          
+      lean    := (legFrac - 0.5) * 55.        "outer legs splay outward"
+      cp1X    := startX + lean.                                                                                                    
+      cp1Y    := startY + 40.
+      cp2X    := (tipPt x * 0.65) + (startX * 0.35).                                                                               
+      cp2Y    := tipPt y - 20.                                                                                                     
+      col     := leg even ifTrue: [ deepPink ] ifFalse: [ neonPink ].
+      startW  := 12.0 - ((legFrac - 0.5) abs * 4.0).                                                                               
+      endW    := 2.0.                                                                                                              
+      n       := 14.                                                                                                               
+      leftPts  := OrderedCollection new.                                                                                           
+      rightPts := OrderedCollection new.                                                                                           
+      0 to: n do: [ :i |
+          | t mt b0 b1 b2 b3 px py dtx dty len nx ny w |                                                                           
+          t  := i asFloat / n.                                                                                                     
+          mt := 1.0 - t.                                                                                                           
+          b0 := mt * mt * mt.                                                                                                      
+          b1 := 3.0 * mt * mt * t.                                                                                                 
+          b2 := 3.0 * mt * t  * t.                                                                                                 
+          b3 := t  * t  * t.
+          px  := (b0 * startX) + (b1 * cp1X) + (b2 * cp2X) + (b3 * tipPt x).                                                       
+          py  := (b0 * startY) + (b1 * cp1Y) + (b2 * cp2Y) + (b3 * tipPt y).                                                       
+          dtx := (3.0 * mt * mt * (cp1X - startX))                                                                                 
+               + (6.0 * mt * t  * (cp2X - cp1X))                                                                                   
+               + (3.0 * t  * t  * (tipPt x - cp2X)).                                                                               
+          dty := (3.0 * mt * mt * (cp1Y - startY))                                                                                 
+               + (6.0 * mt * t  * (cp2Y - cp1Y))
+               + (3.0 * t  * t  * (tipPt y - cp2Y)).                                                                               
+          len := ((dtx * dtx) + (dty * dty)) sqrt.
+          len < 0.001 ifTrue: [ dtx := 0. dty := 1. len := 1.0 ].                                                                  
+          nx := dty negated / len.                                                                                                 
+          ny := dtx / len.
+          w  := ((startW * (1.0 - t)) + (endW * t)) / 2.0.                                                                         
+          leftPts  add: (px + (nx * w)) @ (py + (ny * w)).                                                                         
+          rightPts add: (px - (nx * w)) @ (py - (ny * w)) ].
+      (tentacleElements at: leg)                                                                                                   
+          geometry: (BlPolygonGeometry vertices: (leftPts asArray , rightPts reversed asArray));
+          background: col ].                                                                                                       
+                  
+  "=== Body mantle — elongated ellipse ==="                                                                                        
+  bodyEl := B5Ellipse new
+      extent: 108 @ 162;                                                                                                           
+      background: neonPink;
+      strokeColor: deepPink;
+      strokeWidth: 3;
+      position: cx @ cy.
+  space addChild: bodyEl.
+                                                                                                                                   
+  "=== Pointed mantle tip (the squid cone) ==="
+  bodyTip := B5Triangle new.                                                                                                       
+  bodyTip extent: 600 @ 600.
+  bodyTip v1: (cx - 34) @ (cy + 74).
+  bodyTip v2: (cx + 34) @ (cy + 74).                                                                                               
+  bodyTip v3: cx @ (cy + 142).
+  bodyTip background: neonPink; strokeColor: deepPink; strokeWidth: 2.                                                             
+  space addChild: bodyTip.                                                                                                         
+  
+  "=== Centre stripe ==="                                                                                                          
+  bodyLine := B5Line from: cx @ (cy - 65) to: cx @ (cy + 55).
+  bodyLine strokeColor: lightPink; strokeWidth: 2.
+  space addChild: bodyLine.
+                                                                                                                                   
+  "=== Side fins ==="
+  leftFin := B5Triangle new.                                                                                                       
+  leftFin extent: 600 @ 600.
+  leftFin v1: (cx - 54) @ (cy + 8).
+  leftFin v2: (cx - 100) @ (cy + 55).
+  leftFin v3: (cx - 54) @ (cy + 82).                                                                                               
+  leftFin background: deepPink; strokeColor: lightPink; strokeWidth: 2.
+  space addChild: leftFin.                                                                                                         
+                  
+  rightFin := B5Triangle new.                                                                                                      
+  rightFin extent: 600 @ 600.
+  rightFin v1: (cx + 54) @ (cy + 8).
+  rightFin v2: (cx + 100) @ (cy + 55).
+  rightFin v3: (cx + 54) @ (cy + 82).                                                                                              
+  rightFin background: deepPink; strokeColor: lightPink; strokeWidth: 2.
+  space addChild: rightFin.                                                                                                        
+                  
+  "=== Eye glows ==="                                                                                                              
+  leftGlow  := B5Circle new diameter: 50; background: lightPink; position: (cx - 27) @ (cy - 12).
+  rightGlow := B5Circle new diameter: 50; background: lightPink; position: (cx + 27) @ (cy - 12).                                  
+  space addChild: leftGlow. space addChild: rightGlow.                                                                             
+  
+  "=== Eye whites ==="                                                                                                             
+  leftEye  := B5Circle new diameter: 34; background: Color white; position: (cx - 27) @ (cy - 12).
+  rightEye := B5Circle new diameter: 34; background: Color white; position: (cx + 27) @ (cy - 12).                                 
+  space addChild: leftEye. space addChild: rightEye.
+                                                                                                                                   
+  "=== Pupils ==="                                                                                                                 
+  leftPupil  := B5Circle new diameter: 14; background: (Color r: 0.08 g: 0.0 b: 0.05); position: (cx - 25) @ (cy - 10).
+  rightPupil := B5Circle new diameter: 14; background: (Color r: 0.08 g: 0.0 b: 0.05); position: (cx + 29) @ (cy - 10).            
+  space addChild: leftPupil. space addChild: rightPupil.
+                                                                                                                                   
+  "=== Initialise tip positions and draw tentacles in rest pose ==="
+  tipPositions := Array new: numLegs.                                                                                              
+  1 to: numLegs do: [ :leg |
+      | legFrac startX startY tipX tipY |
+      legFrac := (leg - 1) asFloat / (numLegs - 1).                                                                                
+      startX  := cx + ((legFrac - 0.5) * 95).
+      startY  := cy + 79.                                                                                                          
+      tipX    := startX.
+      tipY    := startY + 90 + (((legFrac - 0.5) abs) * 30).                                                                       
+      tipPositions at: leg put: tipX @ tipY.
+      updateTentacle value: leg value: (tipPositions at: leg) ].                                                                   
+                                                                                                                                   
+  draggedLeg := nil.
+  eyesOpen   := true.                                                                                                              
+                  
+  "=== Show window ==="
+  space show.
+
+  "=== Eye click: toggle pupils open / squinting ==="
+  leftEye addEventHandlerOn: BlMouseDownEvent do: [ :evt |
+      eyesOpen := eyesOpen not.                                                                                                    
+      eyesOpen
+          ifTrue:  [ leftPupil diameter: 14. rightPupil diameter: 14 ]                                                             
+          ifFalse: [ leftPupil diameter: 3.  rightPupil diameter: 3 ] ].
+  rightEye addEventHandlerOn: BlMouseDownEvent do: [ :evt |                                                                        
+      eyesOpen := eyesOpen not.
+      eyesOpen                                                                                                                     
+          ifTrue:  [ leftPupil diameter: 14. rightPupil diameter: 14 ]
+          ifFalse: [ leftPupil diameter: 3.  rightPupil diameter: 3 ] ].                                                           
+  
+  "=== Drag: click within 22px of a tentacle tip to grab and drag it ==="                                                          
+  space addEventHandlerOn: BlMouseDownEvent do: [ :evt |
+      | pos nearest nearDist |                                                                                                     
+      pos := evt position.
+      nearest := nil. nearDist := 22.
+      1 to: numLegs do: [ :leg |
+          | d tip |                                                                                                                
+          tip := tipPositions at: leg.
+          d := ((pos x - tip x) squared + (pos y - tip y) squared) sqrt.                                                           
+          d < nearDist ifTrue: [ nearest := leg. nearDist := d ] ].
+      draggedLeg := nearest ].                                                                                                     
+  
+  space addEventHandlerOn: BlMouseMoveEvent do: [ :evt |                                                                           
+      draggedLeg isNil ifFalse: [
+          tipPositions at: draggedLeg put: evt position.
+          updateTentacle value: draggedLeg value: evt position ] ].                                                                
+  
+  space addEventHandlerOn: BlMouseUpEvent do: [ :evt |                                                                             
+      draggedLeg := nil ].
